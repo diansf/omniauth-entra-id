@@ -53,11 +53,12 @@ module OmniAuth
           BASE_URL
         end
 
-        options.tenant_name                  = provider.tenant_name      if provider.respond_to?(:tenant_name)
-        options.custom_policy                = provider.custom_policy    if provider.respond_to?(:custom_policy)
-        options.authorize_params             = provider.authorize_params if provider.respond_to?(:authorize_params)
-        options.authorize_params.domain_hint = provider.domain_hint      if provider.respond_to?(:domain_hint) && provider.domain_hint
-        options.authorize_params.prompt      = request.params['prompt']  if defined?(request) && request.params['prompt']
+        options.tenant_name                   = provider.tenant_name      if provider.respond_to?(:tenant_name)
+        options.custom_policy                 = provider.custom_policy    if provider.respond_to?(:custom_policy)
+        options.authorize_params              = provider.authorize_params if provider.respond_to?(:authorize_params)
+        options.authorize_params.domain_hint  = provider.domain_hint      if provider.respond_to?(:domain_hint) && provider.domain_hint
+        options.authorize_params.redirect_uri = provider.redirect_uri     if provider.respond_to?(:redirect_uri) && provider.redirect_uri
+        options.authorize_params.prompt       = request.params['prompt']  if defined?(request) && request.params['prompt']
 
         options.authorize_params.scope = if defined?(request) && request.params['scope']
           request.params['scope']
@@ -112,7 +113,7 @@ module OmniAuth
       end
 
       def callback_url
-        full_host + callback_path
+        options[:redirect_uri] || (full_host + callback_path)
       end
 
       # https://learn.microsoft.com/en-us/entra/identity-platform/id-tokens

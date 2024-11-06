@@ -55,6 +55,13 @@ RSpec.describe OmniAuth::Strategies::EntraId do
         expect(subject.authorize_params[:prompt]).to eql('select_account')
       end
 
+      it 'supports custom redirect uri' do
+        @options = { redirect_uri: 'https://foo.bar' }
+        allow(subject).to receive(:request) { request }
+        subject.client
+        expect(subject.authorize_params[:redirect_uri]).to eql('https://foo.bar')
+      end
+
       context 'using client secret flow without client secret' do
         subject do
           OmniAuth::Strategies::EntraId.new(app, { client_id: 'id', tenant_id: 'tenant' }.merge(options))
