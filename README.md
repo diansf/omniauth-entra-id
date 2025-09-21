@@ -104,19 +104,20 @@ To have your application authenticate with Entra via a client secret, specify `c
 
 If you're using the client assertion flow, you need to register your certificate in the Entra portal. For more information, please see [the documentation](https://learn.microsoft.com/en-us/entra/identity-platform/certificate-credentials).
 
-| Option | Use |
-| ------ | --- |
-| `client_id`        | **Mandatory.** Client ID for the 'application' (integration) configured on the Entra side. Found via the Entra UI. |
-| `client_secret`    | **Mandatory for client secret flow.** Client secret for the 'application' (integration) configured on the Entra side. Found via the Entra UI. Don't give this if using client assertion flow. |
-| `certificate_path` | **Mandatory for client assertion flow.** Don't give this if using a client secret instead of client assertion. This should be the filepath to a PKCS#12 file. |
-| `tenant_id`        | **Mandatory for client assertion flow.** Entra Tenant ID for multi-tenanted use. Default is `common`. Forms part of the Entra OAuth URL - `{base}/{tenant_id}/oauth2/v2.0/...` |
-| `base_url`         | Location of Entra login page, for specialised requirements; default is `OmniAuth::Strategies::EntraId::BASE_URL` (at the time of writing, this is `https://login.microsoftonline.com`). |
-| `tenant_name`      | For what is currently known by its old name of "Azure ActiveDirectory B2C" (and only active if `custom_policy` is also provided - see below), set the tenancy name to constructs the correct B2C endpoint of `{tenant_name}.b2clogin.com/{tenant_name}.onmicrosoft.com/{custom_policy>}" and uses that for auth calls. This is a convenience feature; the `base_entra_url` option could also be manually built up in the same way. |
-| `custom_policy`    | Custom policy. Default is nil. Used in conjunction with `tenant_name`- see above. |
-| `authorize_params` | Additional parameters passed as URL query data in the initial OAuth redirection to Microsoft. See below for more. Empty Hash default. |
-| `domain_hint`      | If defined, sets (overwriting, if already present) `domain_hint` inside `authorize_params`. Default `nil` / none. |
-| `scope`            | If defined, sets (overwriting, if already present) `scope` inside `authorize_params`. Default is `OmniAuth::Strategies::EntraId::DEFAULT_SCOPE` (at the time of writing, this is `'openid profile email'`).  |
-| `adfs`             | If defined, modifies the URLs so they work with an on premise ADFS server. In order to use this you also need to set the `base_url` correctly and fill the `tenant_id` with `'adfs'`. |
+| Option                        | Use |
+| ----------------------------- | --- |
+| `client_id`                   | **Mandatory.** Client ID for the 'application' (integration) configured on the Entra side. Found via the Entra UI. |
+| `client_secret`               | **Mandatory for client secret flow.** Client secret for the 'application' (integration) configured on the Entra side. Found via the Entra UI. Don't give this if using client assertion flow. |
+| `certificate_path`            | **Mandatory for client assertion flow.** Don't give this if using a client secret instead of client assertion. This should be the filepath to a PKCS#12 file. |
+| `tenant_id`                   | **Mandatory for client assertion flow.** Entra Tenant ID for multi-tenanted use. Default is `common`. Forms part of the Entra OAuth URL - `{base}/{tenant_id}/oauth2/v2.0/...` |
+| `base_url`                    | Location of Entra login page, for specialised requirements; default is `OmniAuth::Strategies::EntraId::BASE_URL` (at the time of writing, this is `https://login.microsoftonline.com`). |
+| `tenant_name`                 | For what is currently known by its old name of "Azure ActiveDirectory B2C" (and only active if `custom_policy` is also provided - see below), set the tenancy name to constructs the correct B2C endpoint of `{tenant_name}.b2clogin.com/{tenant_name}.onmicrosoft.com/{custom_policy>}" and uses that for auth calls. This is a convenience feature; the `base_entra_url` option could also be manually built up in the same way. |
+| `custom_policy`               | Custom policy. Default is nil. Used in conjunction with `tenant_name`- see above. |
+| `authorize_params`            | Additional parameters passed as URL query data in the initial OAuth redirection to Microsoft. See below for more. Empty Hash default. |
+| `domain_hint`                 | If defined, sets (overwriting, if already present) `domain_hint` inside `authorize_params`. Default `nil` / none. |
+| `scope`                       | If defined, sets (overwriting, if already present) `scope` inside `authorize_params`. Default is `OmniAuth::Strategies::EntraId::DEFAULT_SCOPE` (at the time of writing, this is `'openid profile email'`). |
+| `ìgnore_tid?` or `ignore_tid` | If set to `true`, tenant ID (TID) is *not* included for a user's UID from Entra. Use if you are confident that an Entra OID will be globally unique and have existing OID-only UIDs in use. Default is `false`; both TID and OID are used to form a UID. Note that the option name variation without the question mark only works for directly-specified options; provider classes must always define an override method called `ignore_tid?`. |
+| `adfs?` or `adfs`             | If set to `true`, modifies the URLs so they work with an on-premise AD FS server (Active Directory Federation Services). In order to use this you also need to set the `base_url` correctly and fill the `tenant_id` with `'adfs'`. Note that the option name variation without the question mark only works for directly-specified options; provider classes must always define an override method called `adfs?`. |
 
 In addition, as a special case, if the request URL contains a query parameter `prompt`, then this will be written into `authorize_params` under that key, overwriting if present any other value there. Note that this comes from the current request URL at the time OAuth flow is commencing, _not_ via static options Hash data or via a custom provider class - but you _could_ just as easily set `scope` inside a custom `authorize_params` returned from a provider class, as shown in an example later; the request URL query mechanism is just another way of doing the same thing.
 

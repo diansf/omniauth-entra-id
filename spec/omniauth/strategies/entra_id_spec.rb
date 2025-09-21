@@ -238,24 +238,51 @@ RSpec.describe OmniAuth::Strategies::EntraId do
     end # "describe '#client' do"
   end # "describe 'static common configuration' do"
 
-  describe 'static configuration with on premise ADFS' do
+  describe 'static configuration with on premise AD FS' do
     let(:options) { @options || {} }
+
     subject do
-      OmniAuth::Strategies::EntraId.new(app, {client_id: 'id', client_secret: 'secret', tenant_id: 'adfs', base_url: 'https://login.contoso.com', adfs: true}.merge(options))
+      OmniAuth::Strategies::EntraId.new(
+        app,
+        {
+          client_id:     'id',
+          client_secret: 'secret',
+          tenant_id:     'adfs',
+          base_url:      'https://login.contoso.com'
+        }.merge(options) # 'adfs' or 'adfs?' is set here, by defining @options
+      )
     end
 
-    describe '#client' do
-      it 'has correct authorize url' do
-        allow(subject).to receive(:request) { request }
-        expect(subject.client.options[:authorize_url]).to eql('https://login.contoso.com/adfs/oauth2/authorize')
+    shared_examples 'an integration aware of AD FS' do
+      describe 'wherein #client' do
+        it 'has correct authorize url' do
+          allow(subject).to receive(:request) { request }
+          expect(subject.client.options[:authorize_url]).to eql('https://login.contoso.com/adfs/oauth2/authorize')
+        end
+
+        it 'has correct token url' do
+          allow(subject).to receive(:request) { request }
+          expect(subject.client.options[:token_url]).to eql('https://login.contoso.com/adfs/oauth2/token')
+        end
+      end # "describe 'wherein #client' do"
+    end # "shared_examples 'an integration aware of AD FS wherein' do"
+
+    context ':adfs option variant' do
+      before :each do
+        @options = { adfs: true }
       end
 
-      it 'has correct token url' do
-        allow(subject).to receive(:request) { request }
-        expect(subject.client.options[:token_url]).to eql('https://login.contoso.com/adfs/oauth2/token')
+      it_behaves_like 'an integration aware of AD FS'
+    end # "context ':adfs option variant' do"
+
+    context ':adfs? option variant' do
+      before :each do
+        @options = { adfs?: true }
       end
-    end # "describe '#client' do"
-  end # "describe 'static configuration with on premise ADFS' do"
+
+      it_behaves_like 'an integration aware of AD FS'
+    end # "context ':adfs? option variant' do"
+  end # "describe 'static configuration with on premise AD FS' do"
 
   describe 'dynamic configuration' do
     let(:provider_klass) {
@@ -427,7 +454,7 @@ RSpec.describe OmniAuth::Strategies::EntraId do
     end # "describe '#client' do"
   end # "describe 'dynamic common configuration' do"
 
-  describe 'dynamic configuration with on premise ADFS' do
+  describe 'dynamic configuration with on premise AD FS' do
     let(:provider_klass) {
       Class.new {
         def initialize(strategy)
@@ -472,16 +499,11 @@ RSpec.describe OmniAuth::Strategies::EntraId do
         expect(subject.client.options[:token_url]).to eql('https://login.contoso.com/adfs/oauth2/token')
       end
     end # "describe '#client' do"
-  end # "describe 'dynamic configuration with on premise ADFS' do"
+  end # "describe 'dynamic configuration with on premise AD FS' do"
 
   describe 'raw_info and validation' do
     let(:issued_at ) {  Time.now.utc.to_i         }
     let(:expires_at) { (Time.now.utc + 3600).to_i }
-
-    subject do
-      OmniAuth::Strategies::EntraId.new(app, {client_id: 'id', client_secret: 'secret'})
-    end
-
     let(:id_token_info) do
       {
         ver:                '2.0',
@@ -509,7 +531,39 @@ RSpec.describe OmniAuth::Strategies::EntraId do
       double(:token => SecureRandom.uuid, :params => {'id_token' => id_token})
     end
 
-    before do
+    # Override or add construction options entries by setting @options in a
+    # "before :context" hook - that is BEFORE CONTEXT, since that runs before
+    # the "before :each" hooks a few lines below here which cause 'subject' to
+    # be evaluated. Ignored if @provider_klass is set (see below).
+    #
+    let(:options) do
+      @options || {}
+    end
+
+    # Override options hash with provider class by setting @provider_klass in a
+    # "before :context" hook - that is BEFORE CONTEXT, since that runs before
+    # the "before :each" hooks a few lines below here which cause 'subject' to
+    # be evaluated. If set, @options is ignored (see above).
+    #
+    let(:provider_klass) do
+      @provider_klass || nil
+    end
+
+    subject do
+      if provider_klass.nil?
+        OmniAuth::Strategies::EntraId.new(
+          app,
+          { client_id: 'id', client_secret: 'secret' }.merge(options)
+        )
+      else
+        OmniAuth::Strategies::EntraId.new(
+          app,
+          provider_klass
+        )
+      end
+    end
+
+    before :each do
       allow(subject).to receive(:access_token) { access_token }
       allow(subject).to receive(:request)      { request      }
     end
@@ -533,6 +587,80 @@ RSpec.describe OmniAuth::Strategies::EntraId do
         expect(subject.raw_info['oid']).to eq('my_id')
       end
     end # "context 'with information only in the ID token' do"
+
+    context 'with a TID which is' do
+      context 'missing' do
+        let(:id_token_info) do
+          info = super()
+          info.delete(:tid)
+          info
+        end
+
+        it 'returns a UID comprising of the OID only' do
+          expect(subject.uid).to eq('my_id')
+        end
+      end # "context'"missing' do"
+
+      context 'blank' do
+        let(:id_token_info) do
+          info = super()
+          info[:tid] = ''
+          info
+        end
+
+        it 'returns a UID comprising of the OID only' do
+          expect(subject.uid).to eq('my_id')
+        end
+      end # "context 'blank' do"
+    end # "context 'with a TID which is' do"
+
+    context 'when configured to ignore the TID' do
+      context 'using the :ignore_tid option variant' do
+        before :context do
+          @options = { ignore_tid: true }
+        end
+
+        it 'returns a UID comprising of the OID only' do
+          expect(subject.uid).to eq('my_id')
+        end
+      end # "context 'using the :ignore_tid option variant' do"
+
+      context 'using the :ignore_tid? option variant' do
+        before :context do
+          @options = { ignore_tid?: true }
+        end
+
+        it 'returns a UID comprising of the OID only' do
+          expect(subject.uid).to eq('my_id')
+        end
+      end # "context 'using the :ignore_tid? option variant' do"
+
+      context 'using a custom provider class' do
+        before :context do
+          @provider_klass = Class.new {
+            def initialize(strategy)
+            end
+
+            def client_id
+              'id'
+            end
+
+            def client_secret
+              'secret'
+            end
+
+            def ignore_tid?
+              true
+            end
+          }
+        end
+
+        it 'returns a UID comprising of the OID only' do
+          subject.client
+          expect(subject.uid).to eq('my_id')
+        end
+      end # "context 'using a custom provider class' do"
+    end # "context 'when configured to ignore the TID' do"
 
     context 'with extra information in the auth token' do
       let(:auth_token_info) do
@@ -630,7 +758,7 @@ RSpec.describe OmniAuth::Strategies::EntraId do
         end
       end # "context 'when invalid' do"
 
-      context 'multi-tenant' do
+      context 'multi-tenant, AD FS' do
         let(:id_token_info) do
           hash = super()
           hash['iss'] = 'invalid issuer that should be ignored'
@@ -656,7 +784,39 @@ RSpec.describe OmniAuth::Strategies::EntraId do
             expect { subject.info }.to_not raise_error()
           end
         end # "context '"common" tenant specified' do"
-      end # "context 'multi-tenant' do"
+
+        context '"adfs" tenant specified' do
+          subject do
+            OmniAuth::Strategies::EntraId.new(app, {client_id: 'id', client_secret: 'secret', tenant_id: OmniAuth::Strategies::EntraId::AD_FS_TENANT_ID})
+          end
+
+          it 'skips issuer validation since tenant ID is unknown' do
+            expect { subject.info }.to_not raise_error()
+          end
+        end # "context '"common" tenant specified' do"
+
+        context '"consumers" tenant specified' do
+          subject do
+            OmniAuth::Strategies::EntraId.new(app, {client_id: 'id', client_secret: 'secret', tenant_id: OmniAuth::Strategies::EntraId::CONSUMERS_TENANT_ID})
+          end
+
+          it 'raises an error as the issuer *is* checked' do
+            expect { subject.info }.to raise_error(JWT::InvalidIssuerError)
+          end
+
+          context 'with the "magic" tenant ID' do
+            let(:id_token_info) do
+              hash = super()
+              hash['iss'] = 'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0'
+              hash
+            end
+
+            it 'raises no error' do
+              expect { subject.info }.to_not raise_error()
+            end
+          end # "context 'with the "magic" tenant ID' do"
+        end # "context '"consumers" tenant specified' do"
+      end # "context 'multi-tenant, AD FS' do"
     end # "context 'issuers' do"
 
     context 'with an invalid not_before' do

@@ -14,7 +14,7 @@ Gem::Specification.new do |s|
   s.authors               = [ 'RIPA Global'        ]
   s.email                 = [ 'dev@ripaglobal.com' ]
   s.licenses              = [ 'MIT'               ]
-  s.homepage              = 'https://github.com/RIPAGlobal/omniauth-entra-id'
+  s.homepage              = 'https://github.com/pond/omniauth-entra-id'
 
   s.required_ruby_version = Gem::Requirement.new('>= 3.0.0')
   s.require_paths         = ['lib']
@@ -39,15 +39,16 @@ Gem::Specification.new do |s|
   }
 
   s.metadata = {
-    'homepage_uri'    => 'https://www.ripaglobal.com/',
-    'bug_tracker_uri' => 'https://github.com/RIPAGlobal/omniauth-entra-id/issues/',
-    'changelog_uri'   => 'https://github.com/RIPAGlobal/omniauth-entra-id/blob/master/CHANGELOG.md',
-    'source_code_uri' => 'https://github.com/RIPAGlobal/omniauth-entra-id'
+    'homepage_uri'    => s.homepage,
+    'bug_tracker_uri' => 'https://github.com/pond/omniauth-entra-id/issues/',
+    'changelog_uri'   => 'https://github.com/pond/omniauth-entra-id/blob/master/CHANGELOG.md',
+    'source_code_uri' => 'https://github.com/pond/omniauth-entra-id'
   }
 
-  s.add_runtime_dependency('omniauth-oauth2', '~> 1.8')
+  s.add_runtime_dependency 'jwt',             '>= 2.9.2'
+  s.add_runtime_dependency 'omniauth-oauth2', '~> 1.8'
 
-  s.add_development_dependency('debug', '~>  1.9 ')
-  s.add_development_dependency('rake',  '~> 13.2 ')
-  s.add_development_dependency('rspec', '~>  3.13')
+  s.add_development_dependency 'debug', '~>  1.11'
+  s.add_development_dependency 'rake',  '~> 13.3'
+  s.add_development_dependency 'rspec', '~>  3.13'
 end

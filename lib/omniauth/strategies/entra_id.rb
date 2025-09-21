@@ -9,13 +9,18 @@ module OmniAuth
 
       option :name,            'entra_id'
       option :tenant_provider, nil
+      option :ignore_tid,      false
       option :jwt_leeway,      60
 
-      DEFAULT_SCOPE    = 'openid profile email'
-      COMMON_TENANT_ID = 'common'
+      DEFAULT_SCOPE           = 'openid profile email'
+      COMMON_TENANT_ID        = 'common'
+      AD_FS_TENANT_ID         = 'adfs'
+      ORGANIZATIONS_TENANT_ID = 'organizations'
+      CONSUMERS_TENANT_ID     = 'consumers'
+      CONSUMERS_TENANT_GUID   = '9188040d-6c67-4c5b-b112-36a304b66dad'
 
-      # The tenant_provider must return client_id, client_secret and,
-      # optionally, tenant_id and base_url.
+      # The tenant_provider argument is how the provider class is eventually
+      # passed to us, if one is used instead of an options Hash.
       #
       args [:tenant_provider]
 
@@ -53,12 +58,13 @@ module OmniAuth
           BASE_URL
         end
 
-        options.tenant_name                   = provider.tenant_name      if provider.respond_to?(:tenant_name)
-        options.custom_policy                 = provider.custom_policy    if provider.respond_to?(:custom_policy)
-        options.authorize_params              = provider.authorize_params if provider.respond_to?(:authorize_params)
-        options.authorize_params.domain_hint  = provider.domain_hint      if provider.respond_to?(:domain_hint) && provider.domain_hint
+        options.tenant_name                  = provider.tenant_name      if provider.respond_to?(:tenant_name)
+        options.custom_policy                = provider.custom_policy    if provider.respond_to?(:custom_policy)
+        options.authorize_params             = provider.authorize_params if provider.respond_to?(:authorize_params)
+        options.authorize_params.domain_hint = provider.domain_hint      if provider.respond_to?(:domain_hint) && provider.domain_hint
         options.authorize_params.redirect_uri = provider.redirect_uri     if provider.respond_to?(:redirect_uri) && provider.redirect_uri
         options.authorize_params.prompt       = request.params['prompt']  if defined?(request) && request.params['prompt']
+        options.ignore_tid                   = provider.ignore_tid?      if provider.respond_to?(:ignore_tid?) && provider.ignore_tid?
 
         options.authorize_params.scope = if defined?(request) && request.params['scope']
           request.params['scope']
@@ -88,14 +94,32 @@ module OmniAuth
 
       uid do
         #
-        # https://learn.microsoft.com/en-us/entra/identity-platform/migrate-off-email-claim-authorization
+        # Note 1:
+        #
+        #   https://learn.microsoft.com/en-us/entra/identity-platform/migrate-off-email-claim-authorization
         #
         # OID alone might not be unique; TID must be included. An alternative
         # would be to use 'sub' but this is only unique in client/app
         # registration context. If a different app registration is used, the
-        # 'sub' values can be different too.
+        # 'sub' values can be different too...
         #
-        raw_info['tid'] + raw_info['oid']
+        # Note 2:
+        #
+        #   https://github.com/pond/omniauth-entra-id/issues/42
+        #
+        # ...but not everyone agrees on the necessity of a TID and if migrating
+        # from an earlier version of this gem where user data already includes
+        # OID-only identifiers, you might elect to avoid a difficult migration
+        # by opting out - set the "ignore_tid" option to 'true'.
+        #
+        # NB: If the TID is missing or blank the UID uses only the OID, just as
+        # if the "ignore_tid" option were set.
+        #
+        if options.ignore_tid? || raw_info['tid'].nil?
+          raw_info['oid']
+        else
+          raw_info['tid'] + raw_info['oid']
+        end
       end
 
       info do
@@ -136,26 +160,36 @@ module OmniAuth
 
           # For multi-tenant apps (the 'common' tenant_id) it doesn't make any
           # sense to verify the token issuer, because the value of 'iss' in the
-          # token depends on the 'tid' in the token itself.
+          # token depends on the 'tid' in the token itself. We should also skip
+          # for AD FS local instances, as we don't put a valid tenant ID in its
+          # place, but "adfs" (see AD_FS_TENANT_ID) instead.
           #
-          issuer = if options.tenant_id.nil? || options.tenant_id == COMMON_TENANT_ID
+          # TODO: Unclear about approach to use for ORGANIZATIONS_TENANT_ID.
+          #
+          do_not_verify = (
+            options.tenant_id.nil? ||
+            options.tenant_id == COMMON_TENANT_ID ||
+            options.tenant_id == AD_FS_TENANT_ID
+          )
+
+          issuer = if do_not_verify
             nil
+          elsif options.tenant_id == CONSUMERS_TENANT_ID
+            "#{options.base_url || BASE_URL}/#{CONSUMERS_TENANT_GUID}/v2.0"
           else
             "#{options.base_url || BASE_URL}/#{options.tenant_id}/v2.0"
           end
 
           # https://learn.microsoft.com/en-us/entra/identity-platform/id-tokens#validate-tokens
           #
-          JWT::Verify.verify_claims(
-            id_token_data,
-            verify_iss:        !issuer.nil?,
-            iss:               issuer,
-            verify_aud:        true,
-            aud:               options.client_id,
-            verify_expiration: true,
-            verify_not_before: true,
-            leeway:            options[:jwt_leeway]
-          )
+          verify_params = {
+            aud: options.client_id,
+            exp: { leeway: options.jwt_leeway },
+            nbf: { leeway: options.jwt_leeway }
+          }
+          verify_params[:iss] = issuer unless issuer.nil?
+
+          ::JWT::Claims.verify_payload!(id_token_data, verify_params)
 
           auth_token_data = begin
             ::JWT.decode(access_token.token, nil, false).first

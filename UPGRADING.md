@@ -45,7 +45,7 @@ https://example.com/v1/auth/azure_activedirectory_v2/callback
 ...is now:
 
 ```
-https://example.com/v1/auth/entra/callback
+https://example.com/v1/auth/entra_id/callback
 ```
 
 ### URL generation
@@ -73,9 +73,11 @@ This change is for UIDs and is the main reason for creating a V3 gem, whether or
 * The UID returned by OmniAuth for a user previously depended upon the `oid` (object ID) returned by Microsoft. As noted in #33 and fixed in #34, this _might not be unique_ and tenant ID (`tid`) is supposed to be considered too.
 * Out-of-box, Entra ID will do this. If you were an Azure ActiveDirectory V2 (old-name gem, version 2.x) user, then you will have been receiving different UIDs based only on the `oid` from Microsoft.
 * **The change of OID might break the connection between a previously-registered and logged in user and a new login** as usually, you need to store the OmniAuth UID somewhere alongside or within your User records when a user is "connected to" an external OAuth service such as Entra ID.
+* **However, there is a strong argument that TID is not needed** - see https://github.com/pond/omniauth-entra-id/issues/42 for a good argument to that end.
 
-You have two options, should the issue affect you (and it almost certainly will).
+You have three options, should the issue affect you (and it almost certainly will).
 
+* If you are confident that you still only need the OID, set the `ignore_tid` option to `true` alongside `client_id` and `client_secret` in your OmniAuth Entra ID initialiser or your custom provider class given to that initialiser, if you use one. See the top-level `README.md` for more.
 * If you can determine the tenant IDs for all users in your database, you can just migrate the UIDs. The new UID is just a simple concatenation of tenant ID and object ID, so treating the UID as a string, add the tenant ID as a prefix without any other changes in your migration and things should work fine thereafter.
 * Otherwise, you should lazy-migrate:
   - As usual, in your OAuth callback handler, `request.env['omniauth.auth'].uid` gives the UID - but now that's the "new" Entra gem's value which includes tenant ID.
